@@ -8,11 +8,13 @@ kaboom({
 
 // Speed indentifiers
 const MOVE_SPEED = 120
-const JUMP_FORCE = 360
+const JUMP_FORCE = 400
 const BIG_JUMP_FORCE = 550
 let CURRENT_JUMP_FORCE = JUMP_FORCE
 const FALL_DEATH = 400
 const ENEMY_SPEED = 20
+
+let isJumping = true
 
 // Logic
 
@@ -37,15 +39,11 @@ loadSprite('blue-evil-shroom', 'SvV4ueD.png')
 loadSprite('blue-surprise', 'RMqCc1G.png')
 
 
-
-
-
-
-
-scene("game", ({ score }) => {
+scene("game", ({ level, score }) => {
     layers(['bg', 'obj', 'ui'], 'obj')
 
-    const map = [
+    const maps = [
+        [
             '                                      ',
             '                                      ',
             '                                      ',
@@ -56,8 +54,20 @@ scene("game", ({ score }) => {
             '                            -+        ',
             '                    ^   ^   ()        ',
             '==============================   =====',
+        ],
+        [
+            '£                                       £',
+            '£                                       £',
+            '£                                       £',
+            '£                                       £',
+            '£                                       £',
+            '£        @*@@@@              x x        £',
+            '£                          x x x        £',
+            '£                        x x x x  x   -+£',
+            '£               z   z  x x x x x  x   ()£',
+            '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!',
         ]
-    
+    ]
 
     const levelCfg = {
         width: 20,
@@ -81,7 +91,7 @@ scene("game", ({ score }) => {
 
     }
 
-    const gameLevel = addLevel(map, levelCfg)
+    const gameLevel = addLevel(maps[level], levelCfg)
 
     const scoreLabel = add([
         text(score),
@@ -92,31 +102,31 @@ scene("game", ({ score }) => {
         }
     ])
 
-    add([text('level ' + 'test', pos(4,6))])
+    add([text('level ' + parseInt(level + 1)), pos(40, 6)])
 
-    function big(){
+    function big() {
         let timer = 0
         let isBig = false
         return {
-            update(){
-                if(isBig){
+            update() {
+                if (isBig) {
                     CURRENT_JUMP_FORCE = BIG_JUMP_FORCE
                     timer -= dt()
-                    if (timer <= 0){
+                    if (timer <= 0) {
                         this.smallify()
                     }
                 }
             },
-            isBig(){
+            isBig() {
                 return isBig
             },
-            smallify(){
+            smallify() {
                 this.scale = vec2(1)
                 CURRENT_JUMP_FORCE = JUMP_FORCE
                 timer = 0
                 isBig = false
             },
-            biggify(){
+            biggify(time) {
                 this.scale = vec2(2)
                 timer = time
                 isBig = true
@@ -132,60 +142,86 @@ scene("game", ({ score }) => {
         origin('bot')
     ])
 
-    action('mushroom', (m)=>{
-        m.move(20,0)
+    action('mushroom', (m) => {
+        m.move(20, 0)
     })
 
-    player.on("headbump", (obj) =>{
-        if(obj.is('coin-surprise')){
+    player.on("headbump", (obj) => {
+        if (obj.is('coin-surprise')) {
             gameLevel.spawn('$', obj.gridPos.sub(0, 1))
             destroy(obj)
-            gameLevel.spawn('}', obj.gridPos.sub(0))
+            gameLevel.spawn('}', obj.gridPos.sub(0, 0))
         }
-        if(obj.is('mushroom-surprise')){
+        if (obj.is('mushroom-surprise')) {
             gameLevel.spawn('#', obj.gridPos.sub(0, 1))
             destroy(obj)
-            gameLevel.spawn('}', obj.gridPos.sub(0))
+            gameLevel.spawn('}', obj.gridPos.sub(0, 0))
         }
     })
 
-    player.collides('mushroom', (m) =>{
+    player.collides('mushroom', (m) => {
         destroy(m)
         player.biggify(6)
     })
 
-    player.collides('coin', (c)=>{
+    player.collides('coin', (c) => {
         destroy(c)
         scoreLabel.value++
         scoreLabel.text = scoreLabel.value
     })
 
-    action('dangerous', (d)=>{
+    action('dangerous', (d) => {
         d.move(-ENEMY_SPEED, 0)
     })
 
-    player.collides('dangerous', (d)=>{
-        go('lose', {score: scoreLabel.value})
+    player.collides('dangerous', (d) => {
+        if (isJumping) {
+            destroy(d)
+        } else {
+            go('lose', { score: scoreLabel.value })
+        }
     })
 
-    keyDown('left', () =>{
+    player.action(() => {
+        camPos(player.pos)
+        if (player.pos.y >= FALL_DEATH) {
+            go('lose', { score: scoreLabel.value })
+        }
+    })
+
+    player.collides('pipe', () => {
+        keyPress('down', () => {
+            go('game', {
+                level: (level + 1) % maps.length,
+                score: scoreLabel.value
+            })
+        })
+    })
+
+    keyDown('left', () => {
         player.move(-MOVE_SPEED, 0)
     })
 
-    keyDown('right', () =>{
+    keyDown('right', () => {
         player.move(MOVE_SPEED, 0)
     })
 
-    keyPress('space', () =>{
-        if(player.grounded()) {
+    player.action(() => {
+        if (player.grounded()) {
+            isJumping = false
+        }
+    })
+
+    keyPress('space', () => {
+        if (player.grounded()) {
             isJumping = true
             player.jump(CURRENT_JUMP_FORCE)
         }
     })
 })
 
-scene('lose', ({ score })=>{
-    add([text(score, 32), origin('center'), pos(width()/2, height()/2)])
+scene('lose', ({ score }) => {
+    add([text(score, 32), origin('center'), pos(width() / 2, height() / 2)])
 })
 
-start("game", {score: 0})
+start("game", { level: 0, score: 0 })
